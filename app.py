@@ -1,21 +1,30 @@
 from flask import Flask, jsonify, request
 from escpos.printer import Network
 from flask_cors import CORS
+import unicodedata
  
 app = Flask(__name__)
 CORS(app)
  
 @app.route('/print_comprobante', methods =['POST'])
 def test():
+
     response = jsonify(request.json)
     #return response
     content = request.json
     max_length_line = 51
     line_str = '------------------------------------------------\n'
 
-    printer = Network("192.168.0.102") #Printer IP Address
+    printer = Network("192.168.1.101") #Printer IP Address
+
+    #printer = printer_a.Dummy('POS-5890')
+
+    #printer.charcode()
 
     """ Encabezado BEGIN --------------- """
+
+    #printer.codepage('18')
+    #printer.charcode('latin-1')
 
     printer.set(align='center', font='a')
     printer.text(content['name_comprobante'] + ' ' + content['tipo'] + '\n')
@@ -30,7 +39,7 @@ def test():
 
     printer.text(content['doctype_name_client'] + ': ' + content['cuit_empresa'] + '\n')
 
-    printer.text('Dirección: ' + content['domicilio_comercial_empresa'] + '\n')
+    printer.text(normalize('Dirección: ') + content['domicilio_comercial_empresa'] + '\n')
 
     printer.text('Ing. Brutos: ' + content['ing_brutos_empresa'] + '\n')
 
@@ -51,9 +60,9 @@ def test():
 
     printer.set(align='left', font="b")
     printer.text(content['doctype_name_client'] + ': ' + content['docnumber_client'] +  '\n')
-    printer.text('Condición frente al iva: ' + content['ivacondition_name_client'] +  '\n')
+    printer.text('Condicion frente al iva: ' + content['ivacondition_name_client'] +  '\n')
     printer.text('Apellido y Nombre / Razón Social: ' + content['nombre_fact_client'] +  '\n')
-    printer.text('Condición de venta: ' + content['condicion_venta'] +  '\n')
+    printer.text('Condicion de venta: ' + content['condicion_venta'] +  '\n')
     printer.text('Domicilio: ' + content['direccion_fact_client'] +  '\n')
 
     printer.set(align='center')
@@ -63,16 +72,19 @@ def test():
 
     """ Items BEGIN -------------------- """
     printer.set(align='left', font="b")
+
     for item in content['items']:
+
+        item['name'] = normalize(item['name'])
+        if len(item['name']) > max_length_line :
+            item['name'] = (item['name'])[0: max_length_line]
+            
         printer.text(item['cantidad'] + ' x $' + "{:.2f}".format( float(item['precio']) ) + ' (iva ' + item['iva_name'] + ')\n')
-    
 
         subtotal_str = ('$' + "{:.2f}".format( float(item['subtotal']) ) ).rjust(13)
-        if len(item['name']) > max_length_line :
-            printer.text((item['name'])[0: max_length_line])
-        else:
-            printer.text( ((item['name'])[0: len(item['name'])]).ljust(max_length_line) + subtotal_str )
-
+        
+        printer.text( ((  item['name']  )[0: len(item['name'])]).ljust(max_length_line) + subtotal_str )
+        
     """ Items END ---------------------- """
 
 
@@ -84,9 +96,9 @@ def test():
 
         subtotal_str = ('$' + "{:.2f}".format( float(comboitem['subtotal']) ) ).rjust(13)
         if len(comboitem['name']) > max_length_line :
-            printer.text((comboitem['name'])[0: max_length_line])
+            printer.text((normalize(comboitem['name']))[0: max_length_line])
         else:
-            printer.text( ((comboitem['name'])[0: len(comboitem['name'])]).ljust(max_length_line) + subtotal_str )
+            printer.text( ((normalize(comboitem['name']))[0: len(comboitem['name'])]).ljust(max_length_line) + subtotal_str )
 
     """ Items END ---------------------- """
 
@@ -113,7 +125,11 @@ def test():
     printer.qr(content['qr_text'], 0, 3)
     printer.cut()
 
-    return 'Hello World! I have been dddseen {} times.\n'    
+    return 'Hello World! I have been dddseen {} times.\n'
+
+def normalize(s):
+    
+    return unicodedata.normalize("NFKD", s).encode("ascii","ignore").decode("ascii")
  
 if __name__ == '__main__':
     app.run(debug = True)
